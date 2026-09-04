@@ -84,6 +84,7 @@ nav:
       - "v2 migration guide": advanced/v2_migration.md
     - "FAQ": faq.md
     - "Reliable-MiniSWE baseline": baseline.md
+    - "Reliable-MiniSWE 系统架构": architecture.md
     - "Contributing": contributing.md
   - API Reference:
     - "reference/index.md"

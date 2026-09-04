@@ -2,7 +2,52 @@
 <a href="https://mini-swe-agent.com/latest/"><img src="https://github.com/SWE-agent/mini-swe-agent/raw/main/docs/assets/mini-swe-agent-banner.svg" alt="mini-swe-agent banner" style="height: 7em"/></a>
 </div>
 
-# The minimal AI software engineering agent
+# Reliable-MiniSWE
+
+> 基于 mini-swe-agent 二次开发的、可恢复、可评测并具有安全边界的轻量级 Coding Agent Harness。
+
+Reliable-MiniSWE 不重写 mini-swe-agent 的轻量内核，而是在它清晰的
+Model–Agent–Environment 边界之外增加可靠性工程能力，解决长任务中上下文持续增长、
+模型自己实现又自己验收、循环可能失控、工具权限过大以及运行结果难以量化等问题。
+
+本项目的五个核心目标是：
+
+- **可恢复的 Context Engineering**：模型调用前计算 Token，外置超长工具输出，压缩旧历史并生成结构化 Handoff；通过 Checkpoint 和 Resume 支持中断恢复。
+- **必要而克制的 Multi-Agent**：使用 Implementer–Verifier（Maker–Checker）分工，简单任务不强制启动 Planner。
+- **有界 Loop Engineering**：统一限制迭代、步骤、Token、费用和时间，并检测重复失败与无有效变更。
+- **确定性工具安全策略**：所有工具调用先经过 `ALLOW / DENY / ASK` 策略判定，限制路径、凭证、网络和危险命令。
+- **轨迹级评测闭环**：记录模型、工具、策略、压缩、Checkpoint 和 Verifier 事件，对比原版、增强单 Agent 与完整 Multi-Agent。
+
+当前已完成上游基线测试、一次真实 Agent 修改任务和目标架构设计；正在按纵向功能逐步实现
+第一个亮点“可恢复的 Context Engineering”。尚未完成的能力均属于项目目标，不代表当前
+版本已经可用。
+
+详细设计与基线证据：
+
+- [系统架构与主链路](docs/architecture.md)
+- [原版架构基线](docs/baseline.md)
+- [原版离线测试基线](docs/baseline-tests.md)
+- [原版真实任务基线](docs/baseline-agent-run.md)
+
+## 原版 mini-swe-agent 源码流程
+
+原版的优势是控制流极简：CLI 创建 Model、Environment 和 Agent，`DefaultAgent` 不断把
+完整消息历史发送给模型，执行模型返回的 Bash 动作，再将输出追加回历史，直到任务结束。
+
+<p align="center">
+<img src="img.png" alt="img.png" width="300" />
+</p>
+
+
+这个线性循环易于理解和调试，也是本项目选择 mini-swe-agent 作为底座的原因。但
+`self.messages` 同时承担“完整审计历史”和“模型输入上下文”两种职责，历史会随着任务
+持续增长；原版 trajectory 可以保存过程，却不能直接恢复运行。Reliable-MiniSWE 的第一步
+就是在不破坏完整历史的前提下增加 Context Manager，为后续 Token 预算、输出外置、历史
+压缩、Checkpoint 和 Resume 提供统一接入点。
+
+## 上游项目：mini-swe-agent
+
+以下内容保留自上游 mini-swe-agent。原项目定位是“The minimal AI software engineering agent”。
 
 📣 [mini-swe-agent now powers Ramp SWE-Bench](https://labs.ramp.com/swebench)<br/>
 📣 [mini-swe-agent beats Claude Code and Codex on DeepSWE](https://deepswe.datacurve.ai/blog#evaluation-harness)<br/>

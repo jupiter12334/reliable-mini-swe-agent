@@ -1,0 +1,14 @@
+diff --git a/weather.py b/weather.py
+--- a/weather.py
++++ b/weather.py
+@@ -1,10 +1,8 @@
+ from typing import Any
+ import httpx
+-from httpx import HTTPError
+ from mcp.server.mcpserver import MCPServer
+ 
+ mcp = MCPServer('weather', log_level='ERROR')
+-raise HTTPError
+ 
+ NWS_API_BASE = "https://api.weather.gov"
+ USER_AGENT = "weather-app/1.0"

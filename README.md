@@ -34,10 +34,21 @@ Model–Agent–Environment 边界之外增加可靠性工程能力，解决长�
 原版的优势是控制流极简：CLI 创建 Model、Environment 和 Agent，`DefaultAgent` 不断把
 完整消息历史发送给模型，执行模型返回的 Bash 动作，再将输出追加回历史，直到任务结束。
 
-<p align="center">
-<img src="img.png" alt="img.png" width="300" />
-</p>
-
+```mermaid
+flowchart TD
+    CLI["mini.py<br/>创建 Model、Environment、Agent"] --> Run["DefaultAgent.run()"]
+    Run --> Step["step()"]
+    Step --> Query["query()"]
+    Query --> Messages["self.messages<br/>完整历史"]
+    Messages --> Model["model.query(messages)"]
+    Model --> Action["模型返回 Bash Action"]
+    Action --> Execute["Environment.execute()"]
+    Execute --> Output["stdout / returncode"]
+    Output --> Format["format_observation_messages()"]
+    Format --> Messages
+    Messages --> Save["save()<br/>重写 trajectory JSON"]
+    Save --> Step
+```
 
 这个线性循环易于理解和调试，也是本项目选择 mini-swe-agent 作为底座的原因。但
 `self.messages` 同时承担“完整审计历史”和“模型输入上下文”两种职责，历史会随着任务

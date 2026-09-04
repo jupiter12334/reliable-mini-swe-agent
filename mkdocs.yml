@@ -83,6 +83,7 @@ nav:
       - "Environments": advanced/environments.md
       - "v2 migration guide": advanced/v2_migration.md
     - "FAQ": faq.md
+    - "Reliable-MiniSWE baseline": baseline.md
     - "Contributing": contributing.md
   - API Reference:
     - "reference/index.md"

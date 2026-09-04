@@ -12,6 +12,7 @@ from jinja2 import StrictUndefined, Template
 from pydantic import BaseModel
 
 from minisweagent import Environment, Model, __version__
+from minisweagent.context_manager.context import ContextManager
 from minisweagent.exceptions import FormatError, InterruptAgentFlow, LimitsExceeded, TimeExceeded
 from minisweagent.utils.serialize import recursive_merge
 
@@ -36,7 +37,15 @@ class AgentConfig(BaseModel):
 
 
 class DefaultAgent:
-    def __init__(self, model: Model, env: Environment, *, config_class: type = AgentConfig, **kwargs):
+    def __init__(
+        self,
+        model: Model,
+        env: Environment,
+        *,
+        context_manager: ContextManager | None = None,
+        config_class: type = AgentConfig,
+        **kwargs,
+    ):
         """See the `AgentConfig` class for permitted keyword arguments."""
         self.config = config_class(**kwargs)
         self.messages: list[dict] = []
@@ -48,6 +57,7 @@ class DefaultAgent:
         self.n_calls = 0
         self.n_consecutive_format_errors = 0
         self._start_time = time.time()
+        self.context_manager = context_manager or ContextManager()
 
     def get_template_vars(self, **kwargs) -> dict:
         return recursive_merge(
@@ -146,7 +156,7 @@ class DefaultAgent:
                 }
             )
         self.n_calls += 1
-        message = self.model.query(self.messages)
+        message = self.model.query(self.context_manager.prepare_messages(self.messages))
         self.cost += message.get("extra", {}).get("cost", 0.0)
         self.add_messages(message)
         return message

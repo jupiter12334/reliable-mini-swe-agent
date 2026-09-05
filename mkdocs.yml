@@ -85,6 +85,7 @@ nav:
     - "FAQ": faq.md
     - "Reliable-MiniSWE baseline": baseline.md
     - "Reliable-MiniSWE 系统架构": architecture.md
+    - "CE-02：Token 预算": context-budget.md
     - "Contributing": contributing.md
   - API Reference:
     - "reference/index.md"

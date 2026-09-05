@@ -1,0 +1,9 @@
+# Application budget for the CE-02 example; not a provider's advertised maximum.
+# Merge after mini.yaml. Set agent.context.max_context_tokens=0 to disable.
+agent:
+  context:
+    max_context_tokens: 32768
+    # Optional generation cap only; it does not affect the 80% compaction threshold.
+    max_output_tokens: 4096
+    # Input tokens / total window >= 0.8 requests compaction (compactor must be injected).
+    compaction_threshold: 0.8

@@ -6,13 +6,15 @@ import json
 import logging
 import time
 import traceback
+from dataclasses import asdict
 from pathlib import Path
 
 from jinja2 import StrictUndefined, Template
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from minisweagent import Environment, Model, __version__
-from minisweagent.context_manager.context import ContextManager
+from minisweagent.context_manager.context import ContextBudgetExceeded, ContextConfig, ContextManager
+from minisweagent.context_manager.token_counter import make_model_token_counter
 from minisweagent.exceptions import FormatError, InterruptAgentFlow, LimitsExceeded, TimeExceeded
 from minisweagent.utils.serialize import recursive_merge
 
@@ -34,6 +36,8 @@ class AgentConfig(BaseModel):
     """Exit after this many format errors in a row (0 = no limit)."""
     output_path: Path | None = None
     """Save the trajectory to this path."""
+    context: ContextConfig = Field(default_factory=ContextConfig)
+    """Optional context budget. max_context_tokens=0 preserves the original behavior."""
 
 
 class DefaultAgent:
@@ -57,7 +61,17 @@ class DefaultAgent:
         self.n_calls = 0
         self.n_consecutive_format_errors = 0
         self._start_time = time.time()
-        self.context_manager = context_manager or ContextManager()
+        # 显式注入优先，便于测试或为其他模型提供自定义 Token 计数方式。
+        if context_manager is not None:
+            self.context_manager = context_manager
+        elif self.config.context.max_context_tokens:
+            # CLI 只需提供 context 配置，Agent 会使用当前模型自动组装计数器。
+            self.context_manager = ContextManager(
+                **asdict(self.config.context),
+                token_counter=make_model_token_counter(model, max_output_tokens=self.config.context.max_output_tokens),
+            )
+        else:
+            self.context_manager = ContextManager(**asdict(self.config.context))
 
     def get_template_vars(self, **kwargs) -> dict:
         return recursive_merge(
@@ -108,6 +122,8 @@ class DefaultAgent:
                 self.step()
                 self.n_consecutive_format_errors = 0  # reset on any clean step
             except FormatError as e:
+                # 即使响应格式错误，模型已经返回并产生了真实 usage，仍要留下核对证据。
+                self.context_manager.record_usage(e.messages[0])
                 # The call was billed before parsing failed, so query() never got to charge it.
                 self.cost += e.messages[0].get("extra", {}).get("cost", 0.0)
                 self.n_consecutive_format_errors += 1
@@ -122,6 +138,19 @@ class DefaultAgent:
                     )
                 else:
                     self.add_messages(*e.messages)
+            except ContextBudgetExceeded as e:
+                # 将预算超限变成正常的 Agent 退出状态，trajectory 仍可完整保存和分析。
+                self.add_messages(
+                    {
+                        "role": "exit",
+                        "content": str(e),
+                        "extra": {
+                            "exit_status": "ContextBudgetExceeded",
+                            "submission": "",
+                            "context_usage": asdict(e.usage),
+                        },
+                    }
+                )
             except InterruptAgentFlow as e:
                 self.add_messages(*e.messages)
             except Exception as e:
@@ -155,9 +184,13 @@ class DefaultAgent:
                     "extra": {"exit_status": "TimeExceeded", "submission": ""},
                 }
             )
+        # 必须先预检再增加调用次数；超限时模型根本没有被请求。
+        model_messages = self.context_manager.prepare_messages(self.messages)
         self.n_calls += 1
-        message = self.model.query(self.context_manager.prepare_messages(self.messages))
+        message = self.model.query(model_messages, **self.context_manager.query_kwargs())
         self.cost += message.get("extra", {}).get("cost", 0.0)
+        # 调用前只能估算；模型返回后再用厂商 usage 计算本轮误差。
+        self.context_manager.record_usage(message)
         self.add_messages(message)
         return message
 
@@ -187,6 +220,8 @@ class DefaultAgent:
             "messages": self.messages,
             "trajectory_format": "mini-swe-agent-1.1",
         }
+        if context_data := self.context_manager.serialize():
+            agent_data["info"]["context"] = context_data
         return recursive_merge(agent_data, self.model.serialize(), self.env.serialize(), *extra_dicts)
 
     def save(self, path: Path | None, *extra_dicts) -> dict:
